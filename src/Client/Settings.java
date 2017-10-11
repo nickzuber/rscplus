@@ -80,6 +80,10 @@ public class Settings
 			FileInputStream in = new FileInputStream(Dir.JAR + "/config.ini");
 			props.load(in);
 			in.close();
+      
+      // Special items
+      HIGHLIGHTED_ITEMS = getString(props, "highlighted_items", HIGHLIGHTED_ITEMS);
+      BLOCKED_ITEMS = getString(props, "blocked_items", BLOCKED_ITEMS);
 			
 			//General options
 			CUSTOM_CLIENT_SIZE = getBoolean(props, "custom_client_size", CUSTOM_CLIENT_SIZE);
@@ -284,6 +288,9 @@ public class Settings
 			props.setProperty("first_time", "" + false); //This is set to false, as logically, saving the config would imply this is not a first-run.
 			props.setProperty("disassemble", "" + DISASSEMBLE);
 			props.setProperty("disassemble_directory", "" + DISASSEMBLE_DIRECTORY);
+      
+      props.setProperty("highlighted_items", "" + HIGHLIGHTED_ITEMS);
+      props.setProperty("blocked_items", "" + BLOCKED_ITEMS);
 
 			//Keybinds
 			for (KeybindSet kbs : KeyboardHandler.keybindSetList) {
@@ -802,6 +809,10 @@ public class Settings
 	public static String TWITCH_USERNAME = "";
 	public static boolean SHOW_LOGINDETAILS = true; //TODO: Consider refactoring for clarity. This determines if IP/DNS details are shown at login welcome screen
 	public static boolean SAVE_LOGININFO = true;
+  
+  // Special Item Lists
+  public static String HIGHLIGHTED_ITEMS = "";
+  public static String BLOCKED_ITEMS = "";
 	
 	//Miscellaneous settings (No GUI)
 	public static int COMBAT_STYLE = Client.COMBAT_AGGRESSIVE;

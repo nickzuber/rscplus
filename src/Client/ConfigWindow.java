@@ -168,6 +168,10 @@ public class ConfigWindow {
 	private JTextField streamingPanelTwitchUserTextField;
 	private JCheckBox streamingPanelIPAtLoginCheckbox;
 	private JCheckBox streamingPanelSaveLoginCheckbox;
+  
+  // Special Items
+	private JTextField blockedItemsTextField;
+	private JTextField highlightedItemsTextField;
 	
 	public ConfigWindow() {
 		
@@ -367,6 +371,42 @@ public class ConfigWindow {
 		 */
         
 		generalPanel.setLayout(new BoxLayout(generalPanel, BoxLayout.Y_AXIS));
+    
+    // Blocked Items
+    JPanel blockedItemsPanel = new JPanel();
+		generalPanel.add(blockedItemsPanel);
+		blockedItemsPanel.setLayout(new BoxLayout(blockedItemsPanel, BoxLayout.X_AXIS));
+		blockedItemsPanel.setPreferredSize(new Dimension(0,37));
+		blockedItemsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		blockedItemsPanel.setBorder(new EmptyBorder(0,0,9,0));
+		
+			JLabel blockedItemsPanelNameLabel = new JLabel("Blocked items: ");
+			blockedItemsPanel.add(blockedItemsPanelNameLabel);
+			blockedItemsPanelNameLabel.setAlignmentY((float) 0.9);
+			
+			blockedItemsTextField = new JTextField();
+			blockedItemsPanel.add(blockedItemsTextField);
+			blockedItemsTextField.setMinimumSize(new Dimension(100,28));
+			blockedItemsTextField.setMaximumSize(new Dimension(Short.MAX_VALUE,28));
+			blockedItemsTextField.setAlignmentY((float) 0.75);
+    
+    // Highlighed Items
+    JPanel highlighedItemsPanel = new JPanel();
+		generalPanel.add(highlighedItemsPanel);
+		highlighedItemsPanel.setLayout(new BoxLayout(highlighedItemsPanel, BoxLayout.X_AXIS));
+		highlighedItemsPanel.setPreferredSize(new Dimension(0,37));
+		highlighedItemsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		highlighedItemsPanel.setBorder(new EmptyBorder(0,0,9,0));
+		
+			JLabel highlighedItemsPanelNameLabel = new JLabel("Highlighed items: ");
+			highlighedItemsPanel.add(highlighedItemsPanelNameLabel);
+			highlighedItemsPanelNameLabel.setAlignmentY((float) 0.9);
+			
+			highlightedItemsTextField = new JTextField();
+			highlighedItemsPanel.add(highlightedItemsTextField);
+			highlightedItemsTextField.setMinimumSize(new Dimension(100,28));
+			highlightedItemsTextField.setMaximumSize(new Dimension(Short.MAX_VALUE,28));
+			highlightedItemsTextField.setAlignmentY((float) 0.75);
 		
 		JPanel generalPanelClientSizePanel = new JPanel();
 		generalPanel.add(generalPanelClientSizePanel);
@@ -1114,6 +1154,10 @@ public class ConfigWindow {
 		streamingPanelTwitchUserTextField.setText(Settings.TWITCH_USERNAME);
 		streamingPanelIPAtLoginCheckbox.setSelected(Settings.SHOW_LOGINDETAILS);
 		streamingPanelSaveLoginCheckbox.setSelected(Settings.SAVE_LOGININFO);
+    
+    // Special Items
+		blockedItemsTextField.setText(Settings.BLOCKED_ITEMS);
+		highlightedItemsTextField.setText(Settings.HIGHLIGHTED_ITEMS);
 		
 		for (KeybindSet kbs : KeyboardHandler.keybindSetList) {
 			setKeybindButtonText(kbs);
@@ -1176,6 +1220,10 @@ public class ConfigWindow {
 		Settings.TWITCH_USERNAME = streamingPanelTwitchUserTextField.getText();
 		Settings.SHOW_LOGINDETAILS = streamingPanelIPAtLoginCheckbox.isSelected();
 		Settings.SAVE_LOGININFO = streamingPanelSaveLoginCheckbox.isSelected();
+    
+    // Special Items
+    Settings.BLOCKED_ITEMS = blockedItemsTextField.getText();
+    Settings.HIGHLIGHTED_ITEMS = highlightedItemsTextField.getText();
 		
 		Settings.Save();
 	}

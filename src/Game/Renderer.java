@@ -40,6 +40,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -80,8 +81,10 @@ public class Renderer {
 			image_border = ImageIO.read(Settings.getResource("/assets/border.png"));
 			image_bar_frame = ImageIO.read(Settings.getResource("/assets/bar.png"));
 			image_cursor = ImageIO.read(Settings.getResource("/assets/cursor.png"));
+      image_highlighted_item = ImageIO.read(Settings.getResource("/assets/highlighted_item.png"));
 		} catch (Exception e) {
 			e.printStackTrace();
+      System.exit(1);
 		}
 	}
 
@@ -252,7 +255,30 @@ public class Renderer {
 								}
 							}
 							item_text_loc.add(new Point(x, y));
-							drawShadowText(g2, item.getName() + ((freq == 1) ? "" : " (" + freq + ")"), x, y, color_prayer, true); //TODO: it would be nice if for items like Coins or Runes, we showed how many of the item were on the ground instead of how many times you have to click to pick them all up. Currently will just show "Coins (2)" if there are two stacks of coins on the ground.
+
+              Color itemColor = color_item;
+              boolean drawHighlightedItem = false;
+
+              // Highlight special items
+              if (stringContainsAll(item.getName(), Settings.HIGHLIGHTED_ITEMS)) {
+                drawHighlightedItem = true;
+                itemColor = color_important_item;
+              }
+
+              // super rare item
+              if (item.getName().toLowerCase().contains("dragon")) {
+                itemColor = new Color(240, 62, 62);
+                drawHighlightedItem = true;
+              }
+
+              // Only show item name if its not in our blacklist
+              if (!stringContainsAll(item.getName(), Settings.BLOCKED_ITEMS)) {
+                String text = item.getName() + ((freq == 1) ? "" : " (" + freq + ")");
+  							drawShadowText(g2, text, x, y, itemColor, true);
+                if (drawHighlightedItem) {
+                  drawHighlighImage(g2, text, x, y);
+                }
+              }
 						}
 						last_item = item; //done with item this loop, can save it as last_item
 					}
@@ -303,15 +329,15 @@ public class Renderer {
 				colorFatigue = color_low;
 				alphaFatigue = alpha_time;
 			}
-			
+
 			// Low HP notification
-			
+
 			if (percentHP <= Settings.LOW_HP_NOTIF_VALUE && lastPercentHP > percentHP && lastPercentHP > Settings.LOW_HP_NOTIF_VALUE)
 				NotificationsHandler.notify(NotifType.LOWHP, "Low HP Notification", "Your HP is at " + percentHP + "%");
 			lastPercentHP = percentHP;
-			
+
 			// High fatigue notification
-			
+
 			if (Client.getFatigue() >= Settings.FATIGUE_NOTIF_VALUE && lastFatigue < Client.getFatigue() && lastFatigue < Settings.FATIGUE_NOTIF_VALUE)
 				NotificationsHandler.notify(NotifType.FATIGUE, "High Fatigue Notification", "Your fatigue is at " + Client.getFatigue() + "%");
 			lastFatigue = Client.getFatigue();
@@ -350,7 +376,7 @@ public class Renderer {
 					drawBar(g2, image_bar_frame, x2, y2, colorPrayer, alphaPrayer,
 							Client.current_level[Client.SKILL_PRAYER], Client.base_level[Client.SKILL_PRAYER]);
 					x2 -= barSize;
-	
+
 					drawBar(g2, image_bar_frame, x2, y2, colorHP, alphaHP, Client.current_level[Client.SKILL_HP],
 							Client.base_level[Client.SKILL_HP]);
 					x2 -= barSize;
@@ -492,7 +518,7 @@ public class Renderer {
 					Game.getInstance().getJConfig().changeWorld(i + 1);
 				}
 			}
-			
+
 			drawShadowText(g2, "Populations", width - 67, 14, color_text, false);
 
 			int worldPopArray[];
@@ -568,6 +594,16 @@ public class Renderer {
 		g.setComposite(AlphaComposite.SrcOver.derive(alpha));
 	}
 
+  public static void drawHighlighImage(Graphics2D g, String text, int x, int y) {
+    int correctedX = x;
+    int correctedY = y;
+    // Adjust for centering
+    Dimension bounds = getStringBounds(g, text);
+    correctedX -= (bounds.width / 2);
+    correctedY += (bounds.height / 2);
+    g.drawImage(image_highlighted_item, correctedX - 15, correctedY - 10, null);
+  }
+
 	public static void drawShadowText(Graphics2D g, String text, int x, int y, Color textColor, boolean center) {
 		int textX = x;
 		int textY = y;
@@ -607,6 +643,16 @@ public class Renderer {
 		return new Dimension((int) bounds.getWidth(), (int) bounds.getHeight());
 	}
 
+  private static boolean stringContainsAll(String input, String itemsString) {
+    if (itemsString.length() <= 0) return false;
+    String[] items = itemsString.split(",");
+    for (String item : items) {
+      if (input.trim().toLowerCase().contains(item.trim().toLowerCase()))
+        return true;
+    }
+    return false;
+  }
+
 	private static Dimension new_size = new Dimension(0, 0);
 
 	public static Object instance = null;
@@ -637,18 +683,21 @@ public class Renderer {
 	public static Color color_fatigue = new Color(210, 210, 0);
 	public static Color color_prayer = new Color(160, 160, 210);
 	public static Color color_low = new Color(255, 0, 0);
+  public static Color color_item = new Color(245, 245, 245);
+  public static Color color_important_item = new Color(245, 196, 70);
 
 	public static Image image_border;
 	public static Image image_bar_frame;
 	public static Image image_cursor;
 	private static BufferedImage game_image;
+  public static Image image_highlighted_item;
 
 	private static Item last_item;
 }
 
 class ItemComparator implements Comparator<Item> {
 	public int compare(Item a, Item b) {
-		int offset = (a.getName().compareToIgnoreCase(b.getName()) * -1); //this is reverse alphabetical order b/c we display them/in reverse order (y-=12 ea item) 
+		int offset = (a.getName().compareToIgnoreCase(b.getName()) * -1); //this is reverse alphabetical order b/c we display them/in reverse order (y-=12 ea item)
 		if (offset > 0) { //item a is alphabetically before item b
 			offset = 10;
 		} else if (offset < 0) { //item b is alphabetically before item a

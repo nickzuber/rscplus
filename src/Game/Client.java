@@ -189,6 +189,10 @@ public class Client {
 		}
 	}
 
+  /* NOTE:
+    This controls the chat message (not the username associated)
+    Ornela: [line]
+   */
 	public static String processChatCommand(String line) {
 		if (TwitchIRC.isUsing() && line.startsWith("/")) {
 			String message = line.substring(1, line.length());
@@ -471,6 +475,7 @@ public class Client {
 			username = username.replace("\u00A0", " "); //Prevents non-breaking space in colored usernames appearing as an accented 'a' in console
 		if (message != null)
 			message = message.replace("\u00A0", " ");   //Prevents non-breaking space in colored usernames appearing as an accented 'a' in console
+
 		if (type == CHAT_NONE) {
 			if (username == null && message != null) {
 				if(message.contains("The spell fails! You may try again in 20 seconds"))
@@ -513,7 +518,7 @@ public class Client {
 				if (kbs.getCommandName().equals("show_config_window")) {
 					configWindowShortcut = kbs.getFormattedKeybindText();
 					break;
-				} 
+				}
 			}
 			if (configWindowShortcut.equals("")) {
 				Logger.Error("Could not find the keybind for the config window!");
@@ -561,7 +566,7 @@ public class Client {
 			case CHAT_PRIVATE_LOG_IN_OUT:
 			case CHAT_PLAYER_INTERRACT_OUT:
 			*/
-	
+
 			default:
 				System.out.println("Username specified for unhandled chat type, please report this: " + type);
 				username = username + ": ";
@@ -648,6 +653,7 @@ public class Client {
 		}
 		return colorMessage;
 	}
+
 	public static String colorReplace(String colorMessage) {
 		String[] colorDict = {"(?i)@cya@","|@@|cyan ", //less common colors should go at the bottom b/c we can break search loop early
 		                      "(?i)@whi@","|@@|white ",
@@ -677,7 +683,7 @@ public class Client {
 		}
 
 		//we could replace @.{3}@ with "" to remove "@@@@@" or "@dne@" (i.e. color code which does not exist) just like in chat box,
-		//but I think it's more interesting to leave the misspelled stuff in terminal 
+		//but I think it's more interesting to leave the misspelled stuff in terminal
 
 		//could also respect ~xxx~ but not really useful.
 
