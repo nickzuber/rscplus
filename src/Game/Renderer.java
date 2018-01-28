@@ -266,7 +266,8 @@ public class Renderer {
               }
 
               // super rare item
-              if (item.getName().toLowerCase().contains("dragon")) {
+              if (item.getName().toLowerCase().contains("dragon square") ||
+			      item.getName().toLowerCase().contains("dragon medium")) {
                 itemColor = new Color(240, 62, 62);
                 drawHighlightedItem = true;
               }
