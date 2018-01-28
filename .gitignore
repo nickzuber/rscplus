@@ -6,7 +6,13 @@ Thumbs.db
 /[Bb]in/
 /[Bb]uild/
 /[Dd]ist/
+/[Dd]oc/
 # Ignore files created by posix people
 *~
 # Ignore vim swapfiles
 *.swp
+# Ignore user specific SonarQube files
+sonar-project.properties
+.sonar/
+.scannerwork/
+org.sonarlint.eclipse.core.prefs

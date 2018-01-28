@@ -46,15 +46,17 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-
 import javax.imageio.ImageIO;
-
 import Client.NotificationsHandler;
+import Client.NotificationsHandler.NotifType;
 import Client.Settings;
 import Client.Util;
-import Client.NotificationsHandler.NotifType;
 
+/**
+ * Handles rendering overlays and client adjustments based on window size
+ */
 public class Renderer {
+
 	public static void init() {
 		// Resize game window
 		new_size.width = 512;
@@ -108,12 +110,11 @@ public class Renderer {
 			image_consumer.setDimensions(width, height);
 
 		if (Client.strings != null)
-			Client.strings[262] = fixLengthString("~" + (Renderer.width - (512 - 439))
-					+ "~@whi@Remove         WWWWWWWWWW");
+			Client.strings[262] = fixLengthString("~" + (Renderer.width - (512 - 439)) + "~@whi@Remove         WWWWWWWWWW");
 
 		if (Renderer.instance != null && Reflection.setGameBounds != null) {
 			try {
-				Reflection.setGameBounds.invoke(Renderer.instance, 0, Renderer.width, Renderer.height, 0, (byte) 119);
+				Reflection.setGameBounds.invoke(Renderer.instance, 0, Renderer.width, Renderer.height, 0, (byte)119);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -126,29 +127,29 @@ public class Renderer {
 	public static void present(Graphics g, Image image) {
 		// Update timing
 		long new_time = System.currentTimeMillis();
-		delta_time = (float) (new_time - time) / 1000.0f;
+		delta_time = (float)(new_time - time) / 1000.0f;
 		time = new_time;
-		alpha_time = 0.25f + (((float) Math.sin(time / 100) + 1.0f) / 2.0f * 0.75f);
+		alpha_time = 0.25f + (((float)Math.sin(time / 100) + 1.0f) / 2.0f * 0.75f);
 
 		// Run other parts update methods
 		Client.update();
 
-		Graphics2D g2 = (Graphics2D) game_image.getGraphics();
+		Graphics2D g2 = (Graphics2D)game_image.getGraphics(); // TODO: Declare g2 outside of the present method
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		g2.setFont(font_main);
 
 		g2.drawImage(image, 0, 0, null);
 		g2.drawImage(image_border, 512, height - 13, width - 512, 13, null);
 
-		// In-game ui
+		// In-game UI
 		if (Client.state == Client.STATE_GAME) {
 			if (!Client.isInterfaceOpen() && Client.show_menu == Client.MENU_NONE) {
-				List<Rectangle> npc_hitbox = new ArrayList<Rectangle>();
-				List<Rectangle> player_hitbox = new ArrayList<Rectangle>();
-				List<Point> entity_text_loc = new ArrayList<Point>();
+				List<Rectangle> npc_hitbox = new ArrayList<>();
+				List<Rectangle> player_hitbox = new ArrayList<>();
+				List<Point> entity_text_loc = new ArrayList<>();
 
 				for (Iterator<NPC> iterator = Client.npc_list.iterator(); iterator.hasNext();) {
-					NPC npc = iterator.next();
+					NPC npc = iterator.next(); // TODO: Remove unnecessary allocations
 					Color color = color_low;
 
 					boolean show = false;
@@ -174,9 +175,8 @@ public class Renderer {
 							hitbox = npc_hitbox;
 
 						for (Iterator<Rectangle> boxIterator = hitbox.iterator(); boxIterator.hasNext();) {
-							Rectangle rect = boxIterator.next();
-							if (rect.x == npc.x && rect.y == npc.y && rect.width == npc.width
-									&& rect.height == npc.height) {
+							Rectangle rect = boxIterator.next(); // TODO: Remove unnecessary allocations
+							if (rect.x == npc.x && rect.y == npc.y && rect.width == npc.width && rect.height == npc.height) {
 								showHitbox = false;
 								break;
 							}
@@ -197,7 +197,7 @@ public class Renderer {
 						int x = npc.x + (npc.width / 2);
 						int y = npc.y - 20;
 						for (Iterator<Point> locIterator = entity_text_loc.iterator(); locIterator.hasNext();) {
-							Point loc = locIterator.next();
+							Point loc = locIterator.next(); // TODO: Remove unnecessary allocations
 							if (loc.x == x && loc.y == y)
 								y -= 12;
 						}
@@ -206,26 +206,28 @@ public class Renderer {
 					}
 				}
 
-				List<Rectangle> item_hitbox = new ArrayList<Rectangle>();
-				List<Point> item_text_loc = new ArrayList<Point>();
+				List<Rectangle> item_hitbox = new ArrayList<>();
+				List<Point> item_text_loc = new ArrayList<>();
 
-				if (Settings.SHOW_ITEMINFO) { //don't sort if we aren't displaying any item names anyway
+				if (Settings.SHOW_ITEMINFO) { // Don't sort if we aren't displaying any item names anyway
 					try {
-						Collections.sort(Client.item_list, new ItemComparator()); //keep items in (technically reverse) alphabetical order for SHOW_ITEMINFO instead of randomly changing places each frame
-					} catch (Exception e) { //Sometimes Java helpfully complains that the sorting method violates its general contract.
+						// Keep items in (technically reverse) alphabetical order for SHOW_ITEMINFO instead of randomly
+						// changing places each frame
+						Collections.sort(Client.item_list, new ItemComparator());
+					} catch (Exception e) {
+						// Sometimes Java helpfully complains that the sorting method violates its general contract.
 						e.printStackTrace();
 					}
 				}
 
 				for (Iterator<Item> iterator = Client.item_list.iterator(); iterator.hasNext();) {
-					Item item = iterator.next();
+					Item item = iterator.next(); // TODO: Remove unnecessary allocations
 
 					if (Settings.SHOW_HITBOX) {
 						boolean show = true;
 						for (Iterator<Rectangle> boxIterator = item_hitbox.iterator(); boxIterator.hasNext();) {
-							Rectangle rect = boxIterator.next();
-							if (rect.x == item.x && rect.y == item.y && rect.width == item.width
-									&& rect.height == item.height) {
+							Rectangle rect = boxIterator.next(); // TODO: Remove unnecessary allocations
+							if (rect.x == item.x && rect.y == item.y && rect.width == item.width && rect.height == item.height) {
 								show = false;
 								break;
 							}
@@ -247,9 +249,13 @@ public class Renderer {
 						int y = item.y - 20;
 						int freq = Collections.frequency(Client.item_list, item);
 
-						if (freq == 1 || !item.equals(last_item) || last_item == null) { //We've sorted item list in such a way that it is possible to not draw the ITEMINFO unless it's the first time we've tried to for this itemid at that location by just using last_item. last_item == null necessary in case only one item on screen is being rendered. slight speed increase from freq == 1 if compiler can stop early in conditional.
+						// We've sorted item list in such a way that it is possible to not draw the ITEMINFO unless it's
+						// the first time we've tried to for this itemid at that location by just using last_item.
+						// last_item == null necessary in case only one item on screen is being rendered. slight speed
+						// increase from freq == 1 if compiler can stop early in conditional.
+						if (freq == 1 || !item.equals(last_item) || last_item == null) {
 							for (Iterator<Point> locIterator = item_text_loc.iterator(); locIterator.hasNext();) {
-								Point loc = locIterator.next();
+								Point loc = locIterator.next(); // TODO: Remove unnecessary allocations
 								if (loc.x == x && loc.y == y) {
 									y -= 12;
 								}
@@ -267,7 +273,7 @@ public class Renderer {
 
               // super rare item
               if (item.getName().toLowerCase().contains("dragon square") ||
-			      item.getName().toLowerCase().contains("dragon medium")) {
+			            item.getName().toLowerCase().contains("dragon medium")) {
                 itemColor = new Color(240, 62, 62);
                 drawHighlightedItem = true;
               }
@@ -281,7 +287,7 @@ public class Renderer {
                 }
               }
 						}
-						last_item = item; //done with item this loop, can save it as last_item
+						last_item = item; // Done with item this loop, can save it as last_item
 					}
 				}
 			}
@@ -299,8 +305,7 @@ public class Renderer {
 			last_item = null;
 
 			if (!Client.show_sleeping && Settings.SHOW_INVCOUNT)
-				drawShadowText(g2, Client.inventory_count + "/" + Client.max_inventory, width - 19, 17, color_text,
-						true);
+				drawShadowText(g2, Client.inventory_count + "/" + Client.max_inventory, width - 19, 17, color_text, true);
 
 			int percentHP = 0;
 			int percentPrayer = 0;
@@ -312,8 +317,8 @@ public class Renderer {
 			Color colorFatigue = color_fatigue;
 
 			if (Client.getBaseLevel(Client.SKILL_HP) > 0) {
-				percentHP = Client.getLevel(Client.SKILL_HP) * 100 / Client.getBaseLevel(Client.SKILL_HP);
-				percentPrayer = Client.getLevel(Client.SKILL_PRAYER) * 100 / Client.getBaseLevel(Client.SKILL_PRAYER);
+				percentHP = Client.getCurrentLevel(Client.SKILL_HP) * 100 / Client.getBaseLevel(Client.SKILL_HP);
+				percentPrayer = Client.getCurrentLevel(Client.SKILL_PRAYER) * 100 / Client.getBaseLevel(Client.SKILL_PRAYER);
 			}
 
 			if (percentHP < 30) {
@@ -332,13 +337,11 @@ public class Renderer {
 			}
 
 			// Low HP notification
-
 			if (percentHP <= Settings.LOW_HP_NOTIF_VALUE && lastPercentHP > percentHP && lastPercentHP > Settings.LOW_HP_NOTIF_VALUE)
 				NotificationsHandler.notify(NotifType.LOWHP, "Low HP Notification", "Your HP is at " + percentHP + "%");
 			lastPercentHP = percentHP;
 
 			// High fatigue notification
-
 			if (Client.getFatigue() >= Settings.FATIGUE_NOTIF_VALUE && lastFatigue < Client.getFatigue() && lastFatigue < Settings.FATIGUE_NOTIF_VALUE)
 				NotificationsHandler.notify(NotifType.FATIGUE, "High Fatigue Notification", "Your fatigue is at " + Client.getFatigue() + "%");
 			lastFatigue = Client.getFatigue();
@@ -347,19 +350,17 @@ public class Renderer {
 			int x = 24;
 			int y = 32;
 
-			if (Client.isInCombat() || Settings.COMBAT_MENU) { //combat menu is showing, so move everything down
+			if (Client.isInCombat() || Settings.COMBAT_MENU) { // combat menu is showing, so move everything down
 				y = 138;
 			}
 			if (Settings.SHOW_STATUSDISPLAY) {
 				if (width < 800) {
 					if (!Client.isInterfaceOpen() && !Client.show_questionmenu) {
 						setAlpha(g2, alphaHP);
-						drawShadowText(g2, "Hits: " + Client.current_level[Client.SKILL_HP] + "/"
-								+ Client.base_level[Client.SKILL_HP], x, y, colorHP, false);
+						drawShadowText(g2, "Hits: " + Client.current_level[Client.SKILL_HP] + "/" + Client.base_level[Client.SKILL_HP], x, y, colorHP, false);
 						y += 16;
 						setAlpha(g2, alphaPrayer);
-						drawShadowText(g2, "Prayer: " + Client.current_level[Client.SKILL_PRAYER] + "/"
-								+ Client.base_level[Client.SKILL_PRAYER], x, y, colorPrayer, false);
+						drawShadowText(g2, "Prayer: " + Client.current_level[Client.SKILL_PRAYER] + "/" + Client.base_level[Client.SKILL_PRAYER], x, y, colorPrayer, false);
 						y += 16;
 						setAlpha(g2, alphaFatigue);
 						drawShadowText(g2, "Fatigue: " + Client.getFatigue() + "/100", x, y, colorFatigue, false);
@@ -374,26 +375,23 @@ public class Renderer {
 					drawBar(g2, image_bar_frame, x2, y2, colorFatigue, alphaFatigue, Client.getFatigue(), 100);
 					x2 -= barSize;
 
-					drawBar(g2, image_bar_frame, x2, y2, colorPrayer, alphaPrayer,
-							Client.current_level[Client.SKILL_PRAYER], Client.base_level[Client.SKILL_PRAYER]);
+					drawBar(g2, image_bar_frame, x2, y2, colorPrayer, alphaPrayer, Client.current_level[Client.SKILL_PRAYER], Client.base_level[Client.SKILL_PRAYER]);
 					x2 -= barSize;
 
-					drawBar(g2, image_bar_frame, x2, y2, colorHP, alphaHP, Client.current_level[Client.SKILL_HP],
-							Client.base_level[Client.SKILL_HP]);
+					drawBar(g2, image_bar_frame, x2, y2, colorHP, alphaHP, Client.current_level[Client.SKILL_HP], Client.base_level[Client.SKILL_HP]);
 					x2 -= barSize;
 				}
 			}
 			// Draw under combat style info
 			if (!Client.isInterfaceOpen()) {
 				if (time <= Client.magic_timer) {
-					float timer = (float) Math.ceil((Client.magic_timer - time) / 1000.0);
-					drawShadowText(g2, "Magic Timer: " + (int) timer, x, y, color_text, false);
+					float timer = (float)Math.ceil((Client.magic_timer - time) / 1000.0);
+					drawShadowText(g2, "Magic Timer: " + (int)timer, x, y, color_text, false);
 					y += 14;
 				}
 
 				for (int i = 0; i < 18; i++) {
-					if (Client.current_level[i] != Client.base_level[i]
-							&& (i != Client.SKILL_HP && i != Client.SKILL_PRAYER)) {
+					if (Client.current_level[i] != Client.base_level[i] && (i != Client.SKILL_HP && i != Client.SKILL_PRAYER)) {
 						int diff = Client.current_level[i] - Client.base_level[i];
 						Color color = color_low;
 
@@ -419,14 +417,14 @@ public class Renderer {
 
 				// Draw Skills
 				for (int i = 0; i < 18; i++) {
-					drawShadowText(g2, Client.skill_name[i] + " (" + i + "): " + Client.current_level[i] + "/"
-							+ Client.base_level[i] + " (" + Client.getXP(i) + " xp)", x, y, color_text, false);
+					drawShadowText(g2, Client.skill_name[i] + " (" + i + "): " + Client.current_level[i] + "/" + Client.base_level[i] + " (" + Client.getXP(i) + " xp)", x, y,
+							color_text, false);
 					y += 16;
 				}
 
 				// Draw Fatigue
 				y += 16;
-				drawShadowText(g2, "Fatigue: " + ((float) Client.fatigue * 100.0f / 750.0f), x, y, color_text, false);
+				drawShadowText(g2, "Fatigue: " + ((float)Client.fatigue * 100.0f / 750.0f), x, y, color_text, false);
 				y += 16;
 
 				// Draw Mouse Info
@@ -478,8 +476,7 @@ public class Renderer {
 				y += 16;
 			}
 
-			// drawShadowText(g2, "Test: " + Client.test, 100, 100, color_text,
-			// false);
+			// drawShadowText(g2, "Test: " + Client.test, 100, 100, color_text, false);
 
 			g2.setFont(font_big);
 			if (Settings.FATIGUE_ALERT && Client.getFatigue() >= 98 && !Client.isInterfaceOpen()) {
@@ -509,12 +506,10 @@ public class Renderer {
 				g2.setColor(color);
 				g2.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
 				setAlpha(g2, 1.0f);
-				drawShadowText(g2, Settings.WORLD_LIST[i], bounds.x + (bounds.width / 2), bounds.y + 4, color_text,
-						true);
+				drawShadowText(g2, Settings.WORLD_LIST[i], bounds.x + (bounds.width / 2), bounds.y + 4, color_text, true);
 
 				// Handle world selection click
-				if (MouseHandler.x >= bounds.x && MouseHandler.x <= bounds.x + bounds.width
-						&& MouseHandler.y >= bounds.y && MouseHandler.y <= bounds.y + bounds.height
+				if (MouseHandler.x >= bounds.x && MouseHandler.x <= bounds.x + bounds.width && MouseHandler.y >= bounds.y && MouseHandler.y <= bounds.y + bounds.height
 						&& MouseHandler.mouseClicked) {
 					Game.getInstance().getJConfig().changeWorld(i + 1);
 				}
@@ -587,8 +582,7 @@ public class Renderer {
 		setAlpha(g, 1.0f);
 
 		g.drawImage(image_bar_frame, x, y, null);
-		drawShadowText(g, value + "/" + total, x + (image.getWidth(null) / 2), y + (image.getHeight(null) / 2) - 2,
-				color_text, true);
+		drawShadowText(g, value + "/" + total, x + (image.getWidth(null) / 2), y + (image.getHeight(null) / 2) - 2, color_text, true);
 	}
 
 	public static void setAlpha(Graphics2D g, float alpha) {
@@ -641,7 +635,7 @@ public class Renderer {
 	private static Dimension getStringBounds(Graphics2D g, String str) {
 		FontRenderContext context = g.getFontRenderContext();
 		Rectangle2D bounds = g.getFont().getStringBounds(str, context);
-		return new Dimension((int) bounds.getWidth(), (int) bounds.getHeight());
+		return new Dimension((int)bounds.getWidth(), (int)bounds.getHeight());
 	}
 
   private static boolean stringContainsAll(String input, String itemsString) {
@@ -697,16 +691,20 @@ public class Renderer {
 }
 
 class ItemComparator implements Comparator<Item> {
+
+	@Override
 	public int compare(Item a, Item b) {
-		int offset = (a.getName().compareToIgnoreCase(b.getName()) * -1); //this is reverse alphabetical order b/c we display them/in reverse order (y-=12 ea item)
-		if (offset > 0) { //item a is alphabetically before item b
+		// this is reverse alphabetical order b/c we display them/in reverse order (y-=12 ea item)
+		int offset = a.getName().compareToIgnoreCase(b.getName()) * -1;
+		if (offset > 0) { // item a is alphabetically before item b
 			offset = 10;
-		} else if (offset < 0) { //item b is alphabetically before item a
+		} else if (offset < 0) { // item b is alphabetically before item a
 			offset = -10;
-		} else { //items have the same name
-			//we would like to group items that are on the same tile as well, not just having the same name, so that we can use "last_item" in a useful way
+			// items have the same name we would like to group items that are on the same tile as well, not just having
+			// the same name, so that we can use "last_item" in a useful way
+		} else {
 			if (a.x == b.x && a.y == b.y) {
-				offset = 0; //name is the same and so is location, items are considered equal
+				offset = 0; // name is the same and so is location, items are considered equal
 			} else {
 				if (a.x < b.x) {
 					offset = -5;
