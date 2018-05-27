@@ -485,7 +485,7 @@ public class Renderer {
 			}
 			
 			// NPC Post-processing for ui
-			if (Settings.SHOW_COMBAT_INFO) {
+			if (Settings.SHOW_COMBAT_INFO && !Client.isInterfaceOpen()) {
 				for (Iterator<NPC> iterator = Client.npc_list.iterator(); iterator.hasNext();) {
 					NPC npc = iterator.next();
 					if (npc != null && isInCombatWithNPC(npc)) {
