@@ -37,6 +37,8 @@ import Game.Client;
 import Game.Game;
 import Game.KeyboardHandler;
 import Game.Renderer;
+import Game.Replay;
+// check that the import Client.NotificationsHandler is present!
 
 /**
  * Manages storing, loading, and changing settings.
@@ -46,7 +48,7 @@ public class Settings {
 	// Internally used variables
 	public static boolean fovUpdateRequired;
 	public static boolean versionCheckRequired = true;
-	public static final double VERSION_NUMBER = 20180527.192308;
+	public static final double VERSION_NUMBER = 20180603.070551;
 	/**
 	 * A time stamp corresponding to the current version of this source code. Used as a sophisticated versioning system.
 	 *
@@ -79,6 +81,7 @@ public class Settings {
 	public static int FATIGUE_FIGURES = 2;
 	public static boolean FATIGUE_ALERT = true;
 	public static boolean INVENTORY_FULL_ALERT = false;
+	public static boolean INDICATORS = true;
 	/**
 	 * Defines to what extent the item names should be patched.
 	 * <p>
@@ -99,6 +102,7 @@ public class Settings {
 	 * </p>
 	 */
 	public static int COMMAND_PATCH_TYPE = 3;
+	public static boolean BYPASS_ATTACK = false;
 	public static boolean HIDE_ROOFS = true;
 	public static boolean COLORIZE = true; // TODO: Vague, consider refactoring for clarity
 	public static int FOV = 9;
@@ -108,6 +112,7 @@ public class Settings {
 	// Overlays options
 	public static boolean SHOW_STATUSDISPLAY = true; // TODO: PLEASE refactor to a name that isn't uselessly vague. This
 														// is apparently the HP/Prayer/Fatigue display.
+	public static boolean SHOW_BUFFS = true;
 	public static boolean SHOW_INVCOUNT = true;
 	public static boolean SHOW_ITEMINFO = false; // TODO: Refactor to add the word 'overlay' for clarity
 	public static boolean SHOW_PLAYERINFO = false; // TODO: See above
@@ -159,6 +164,11 @@ public class Settings {
 	public static boolean UPDATE_CONFIRMATION = false;
 	public static boolean DISASSEMBLE = false;
 	public static String DISASSEMBLE_DIRECTORY = "dump";
+    
+    //rsc-replay settings
+    public static boolean RECORD_KB_MOUSE = false;
+    public static boolean RECORD_AUTOMATICALLY = false;
+    public static boolean RECORD_AUTOMATICALLY_FIRST_TIME = true;
 	
 	private Settings() {
 		// Empty private constructor to prevent instantiation.
@@ -191,6 +201,8 @@ public class Settings {
 		Util.makeDirectory(Dir.CACHE);
 		Dir.SCREENSHOT = Dir.JAR + "/screenshots";
 		Util.makeDirectory(Dir.SCREENSHOT);
+		Dir.REPLAY = Dir.JAR + "/replay";
+		Util.makeDirectory(Dir.REPLAY);
 	}
 	
 	/**
@@ -218,6 +230,7 @@ public class Settings {
 			INVENTORY_FULL_ALERT = getBoolean(props, "inventory_full_alert", INVENTORY_FULL_ALERT);
 			NAME_PATCH_TYPE = getInt(props, "name_patch_type", NAME_PATCH_TYPE);
 			COMMAND_PATCH_TYPE = getInt(props, "command_patch_type", COMMAND_PATCH_TYPE);
+			BYPASS_ATTACK = getBoolean(props, "bypass_attack", BYPASS_ATTACK);
 			HIDE_ROOFS = getBoolean(props, "hide_roofs", HIDE_ROOFS);
 			COLORIZE = getBoolean(props, "colorize", COLORIZE);
 			FOV = getInt(props, "fov", FOV);
@@ -225,9 +238,11 @@ public class Settings {
 			VIEW_DISTANCE = getInt(props, "view_distance", VIEW_DISTANCE);
 			START_SEARCHEDBANK = getBoolean(props, "start_searched_bank", START_SEARCHEDBANK);
 			SEARCH_BANK_WORD = getString(props, "search_bank_word", SEARCH_BANK_WORD);
+			INDICATORS = getBoolean(props, "indicators", INDICATORS);
 			
 			// Overlays options
 			SHOW_STATUSDISPLAY = getBoolean(props, "show_statusdisplay", SHOW_STATUSDISPLAY);
+			SHOW_BUFFS = getBoolean(props, "show_buffs", SHOW_BUFFS);
 			SHOW_INVCOUNT = getBoolean(props, "show_invcount", SHOW_INVCOUNT);
 			SHOW_ITEMINFO = getBoolean(props, "show_iteminfo", SHOW_ITEMINFO);
 			SHOW_PLAYERINFO = getBoolean(props, "show_playerinfo", SHOW_PLAYERINFO);
@@ -273,6 +288,20 @@ public class Settings {
 			DISASSEMBLE = getBoolean(props, "disassemble", false);
 			DISASSEMBLE_DIRECTORY = getString(props, "disassemble_directory", "dump");
 			
+            // Keybinds
+			for (KeybindSet kbs : KeyboardHandler.keybindSetList) {
+				String keybindCombo = getString(props, "key_" + kbs.commandName, "" + kbs.modifier + "*" + kbs.key);
+				kbs.modifier = getKeyModifierFromString(keybindCombo);
+				kbs.key = Integer.parseInt(keybindCombo.substring(2));
+			}
+            
+            // Replay
+            RECORD_AUTOMATICALLY = getBoolean(props, "record_automatically", RECORD_AUTOMATICALLY);
+            RECORD_AUTOMATICALLY_FIRST_TIME = getBoolean(props, "record_automatically_first_time", RECORD_AUTOMATICALLY_FIRST_TIME);
+            RECORD_KB_MOUSE = getBoolean(props, "record_kb_mouse", RECORD_KB_MOUSE);
+            
+            
+            
 			// Sanitize settings
 			
 			if (CUSTOM_CLIENT_SIZE_X < 512) {
@@ -331,13 +360,6 @@ public class Settings {
 				FATIGUE_FIGURES = 7;
 				save();
 			}
-			
-			// Keybinds
-			for (KeybindSet kbs : KeyboardHandler.keybindSetList) {
-				String keybindCombo = getString(props, "key_" + kbs.commandName, "" + kbs.modifier + "*" + kbs.key);
-				kbs.modifier = getKeyModifierFromString(keybindCombo);
-				kbs.key = Integer.parseInt(keybindCombo.substring(2));
-			}
 		} catch (Exception e) {
 		}
 		
@@ -384,6 +406,7 @@ public class Settings {
 			props.setProperty("inventory_full_alert", Boolean.toString(INVENTORY_FULL_ALERT));
 			props.setProperty("name_patch_type", Integer.toString(NAME_PATCH_TYPE));
 			props.setProperty("command_patch_type", Integer.toString(COMMAND_PATCH_TYPE));
+			props.setProperty("bypass_attack", Boolean.toString(BYPASS_ATTACK));
 			props.setProperty("hide_roofs", Boolean.toString(HIDE_ROOFS));
 			props.setProperty("colorize", Boolean.toString(COLORIZE));
 			props.setProperty("fov", Integer.toString(FOV));
@@ -394,6 +417,7 @@ public class Settings {
 			
 			// Overlays
 			props.setProperty("show_statusdisplay", Boolean.toString(SHOW_STATUSDISPLAY));
+			props.setProperty("show_buffs", Boolean.toString(SHOW_BUFFS));
 			props.setProperty("show_invcount", Boolean.toString(SHOW_INVCOUNT));
 			props.setProperty("show_iteminfo", Boolean.toString(SHOW_ITEMINFO));
 			props.setProperty("show_playerinfo", Boolean.toString(SHOW_PLAYERINFO));
@@ -407,6 +431,7 @@ public class Settings {
 			props.setProperty("debug", Boolean.toString(DEBUG));
 			props.setProperty("highlighted_items", "" + Util.joinAsString(",", HIGHLIGHTED_ITEMS));
 			props.setProperty("blocked_items", "" + Util.joinAsString(",", BLOCKED_ITEMS));
+			props.setProperty("indicators", Boolean.toString(INDICATORS));
 
 			// Notifications
 			props.setProperty("tray_notifs", Boolean.toString(TRAY_NOTIFS));
@@ -444,7 +469,12 @@ public class Settings {
 			for (KeybindSet kbs : KeyboardHandler.keybindSetList) {
 				props.setProperty("key_" + kbs.commandName, Integer.toString(getIntForKeyModifier(kbs)) + "*" + kbs.key);
 			}
-			
+
+            // Replay
+            props.setProperty("record_automatically",Boolean.toString(RECORD_AUTOMATICALLY));
+            props.setProperty("record_automatically_first_time",Boolean.toString(RECORD_AUTOMATICALLY_FIRST_TIME));
+            props.setProperty("record_kb_mouse",Boolean.toString(RECORD_KB_MOUSE));
+            
 			FileOutputStream out = new FileOutputStream(Dir.JAR + "/config.ini");
 			props.store(out, "---rscplus config---");
 			out.close();
@@ -527,6 +557,15 @@ public class Settings {
 	 * Setting toggle methods
 	 */
 	
+	public static void toggleBypassAttack() {
+		BYPASS_ATTACK = !BYPASS_ATTACK;
+		if (BYPASS_ATTACK)
+			Client.displayMessage("@cya@You are now able to left click attack all monsters", Client.CHAT_NONE);
+		else
+			Client.displayMessage("@cya@You are no longer able to left click attack all monsters", Client.CHAT_NONE);
+		save();
+	}
+	
 	public static void toggleHideRoofs() {
 		HIDE_ROOFS = !HIDE_ROOFS;
 		if (HIDE_ROOFS)
@@ -560,6 +599,15 @@ public class Settings {
 			Client.displayMessage("@cya@Inventory count is now shown", Client.CHAT_NONE);
 		else
 			Client.displayMessage("@cya@Inventory count is now hidden", Client.CHAT_NONE);
+		save();
+	}
+	
+	public static void toggleBuffs() {
+		SHOW_BUFFS = !SHOW_BUFFS;
+		if (Settings.SHOW_BUFFS)
+			Client.displayMessage("@cya@Combat (de)buffs and cooldowns are now shown", Client.CHAT_NONE);
+		else
+			Client.displayMessage("@cya@Combat (de)buffs and cooldowns are now hidden", Client.CHAT_NONE);
 		save();
 	}
 	
@@ -607,6 +655,7 @@ public class Settings {
 			Client.displayMessage("@cya@Player info is now hidden", Client.CHAT_NONE);
 		save();
 	}
+    
 	
 	public static void toggleShowLoginDetails() {
 		SHOW_LOGINDETAILS = !SHOW_LOGINDETAILS;
@@ -697,6 +746,15 @@ public class Settings {
 			Client.displayMessage("@cya@Colors are now shown in terminal", Client.CHAT_NONE);
 		else
 			Client.displayMessage("@cya@Colors are now ignored in terminal", Client.CHAT_NONE);
+		save();
+	}
+	
+	public static void toggleIndicators() {
+		INDICATORS = !INDICATORS;
+		if (INDICATORS)
+			Client.displayMessage("@cya@Connection indicators are now shown", Client.CHAT_NONE);
+		else
+			Client.displayMessage("@cya@Connection indicators are now ignored", Client.CHAT_NONE);
 		save();
 	}
 	
@@ -839,6 +897,7 @@ public class Settings {
 		public static String CACHE;
 		public static String DUMP;
 		public static String SCREENSHOT;
+		public static String REPLAY;
 	}
 	
 	public static String[] WORLD_LIST = { "1", "2", "3", "4", "5" };
@@ -848,109 +907,127 @@ public class Settings {
 	 * 
 	 * @param commandName the name of a keybind command as defined by {@link ConfigWindow#addKeybindSet}
 	 */
-	public static void processKeybindCommand(String commandName) {
+	public static boolean processKeybindCommand(String commandName) {
 		switch (commandName) {
 		case "sleep":
-			if (Client.state != Client.STATE_LOGIN)
+			if (Client.state != Client.STATE_LOGIN && !Replay.isPlaying)
 				Client.sleep();
-			break;
+			return true;
 		case "logout":
 			if (Client.state != Client.STATE_LOGIN)
 				Client.logout();
-			break;
+			return true;
 		case "screenshot":
-			Renderer.takeScreenshot();
-			break;
+            if (!Replay.isPlaying) {
+                Renderer.takeScreenshot();
+            }
+			return true;
+		case "toggle_indicators":
+			Settings.toggleIndicators();
+			return true;
 		case "toggle_colorize":
 			Settings.toggleColorTerminal();
-			break;
+			return true;
 		case "toggle_combat_xp_menu":
 			Settings.toggleCombatMenu();
-			break;
+			return true;
 		case "toggle_debug":
 			Settings.toggleDebug();
-			break;
+			return true;
 		case "toggle_fatigue_alert":
 			Settings.toggleFatigueAlert();
-			break;
+			return true;
 		case "toggle_inventory_full_alert":
 			Settings.toggleInventoryFullAlert();
-			break;
+			return true;
 		case "toggle_fatigue_drops":
 			Settings.toggleFatigueDrops();
-			break;
+			return true;
 		case "toggle_food_heal_overlay":
 			Settings.toggleFoodOverlay();
-			break;
+			return true;
 		case "toggle_friend_name_overlay":
 			Settings.toggleShowFriendInfo();
-			break;
+			return true;
+		case "toggle_buffs_display":
+			Settings.toggleBuffs();
+			return true;
 		case "toggle_hpprayerfatigue_display":
 			Settings.toggleStatusDisplay();
-			break;
+			return true;
 		case "toggle_inven_count_overlay":
 			Settings.toggleInvCount();
-			break;
+			return true;
 		case "toggle_ipdns":
 			Settings.toggleShowLoginDetails();
-			break;
+			return true;
 		case "toggle_item_overlay":
 			Settings.toggleShowItemInfo();
-			break;
+			return true;
 		case "toggle_hitboxes":
 			Settings.toggleShowHitbox();
-			break;
+			return true;
 		case "toggle_npc_name_overlay":
 			Settings.toggleShowNPCInfo();
-			break;
+			return true;
 		case "toggle_player_name_overlay":
 			Settings.toggleShowPlayerInfo();
-			break;
+			return true;
+		case "toggle_bypass_attack":
+			Settings.toggleBypassAttack();
+			return true;
 		case "toggle_roof_hiding":
 			Settings.toggleHideRoofs();
-			break;
+			return true;
 		case "toggle_save_login_info":
 			Settings.toggleSaveLoginInfo();
-			break;
+			return true;
 		case "toggle_health_regen_timer":
 			Settings.toggleHealthRegenTimer();
-			break;
+			return true;
 		case "toggle_twitch_chat":
 			Settings.toggleTwitchHide();
-			break;
+			return true;
 		case "toggle_xp_drops":
 			Settings.toggleXpDrops();
-			break;
+			return true;
 		case "toggle_start_searched_bank":
 			Settings.toggleStartSearchedBank("", false);
-			break;
+			return true;
 		case "show_config_window":
 			Launcher.getConfigWindow().showConfigWindow();
-			break;
+			return true;
 		case "world_1":
 			if (Client.state == Client.STATE_LOGIN)
 				Game.getInstance().getJConfig().changeWorld(1);
-			break;
+			return true;
 		case "world_2":
 			if (Client.state == Client.STATE_LOGIN)
 				Game.getInstance().getJConfig().changeWorld(2);
-			break;
+			return true;
 		case "world_3":
 			if (Client.state == Client.STATE_LOGIN)
 				Game.getInstance().getJConfig().changeWorld(3);
-			break;
+			return true;
 		case "world_4":
 			if (Client.state == Client.STATE_LOGIN)
 				Game.getInstance().getJConfig().changeWorld(4);
-			break;
+			return true;
 		case "world_5":
 			if (Client.state == Client.STATE_LOGIN)
 				Game.getInstance().getJConfig().changeWorld(5);
-			break;
+			return true;
+		case "stop":
+		case "pause":
+        case "ff_plus":
+        case "ff_minus":
+        case "ff_reset":
+			return Replay.controlPlayback(commandName);
 		default:
 			Logger.Error("An unrecognized command was sent to processCommand: " + commandName);
 			break;
 		}
+        return false;
 	}
 	
 	/**
@@ -963,12 +1040,14 @@ public class Settings {
 		LOAD_CHAT_HISTORY = false;
 		COMBAT_MENU = false;
 		SHOW_XPDROPS = true;
+		INDICATORS = true;
 		SHOW_FATIGUEDROPS = true;
 		FATIGUE_FIGURES = 2;
 		FATIGUE_ALERT = true;
 		INVENTORY_FULL_ALERT = false;
 		NAME_PATCH_TYPE = 3;
 		COMMAND_PATCH_TYPE = 3;
+		BYPASS_ATTACK = false;
 		HIDE_ROOFS = true;
 		COLORIZE = true;
 		FOV = 9;
@@ -984,6 +1063,7 @@ public class Settings {
 	 */
 	public static void restoreDefaultOverlays() {
 		SHOW_STATUSDISPLAY = true;
+		SHOW_BUFFS = true;
 		SHOW_INVCOUNT = true;
 		SHOW_ITEMINFO = false;
 		SHOW_PLAYERINFO = false;

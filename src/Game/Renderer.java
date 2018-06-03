@@ -38,6 +38,7 @@ import java.awt.image.BufferedImage;
 import java.awt.image.ImageConsumer;
 import java.io.File;
 import java.io.InputStream;
+import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -49,6 +50,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TimeZone;
 import javax.imageio.ImageIO;
+import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
+import Client.Launcher;
+import Client.Logger;
 import Client.NotificationsHandler;
 import Client.NotificationsHandler.NotifType;
 import Client.Settings;
@@ -80,6 +85,7 @@ public class Renderer {
 	public static Color color_fatigue = new Color(210, 210, 0);
 	public static Color color_prayer = new Color(160, 160, 210);
 	public static Color color_low = new Color(255, 0, 0);
+	public static Color color_poison = new Color(155, 205, 50);
 	public static Color color_item = new Color(245, 245, 245);
 	public static Color color_item_highlighted = new Color(245, 196, 70);
 	
@@ -100,9 +106,13 @@ public class Renderer {
 	private static long fps_timer = 0;
 	private static boolean screenshot = false;
 	
+	public static int replayOption = 0;
+	public static String replayName = "";
+	
 	public static String[] shellStrings;
 	
 	private static boolean macOS_resize_workaround = Util.isMacOS();
+    private static boolean showRecordAlwaysDialogueThisFrame = false;
 	
 	public static void init() {
 		// patch copyright to match current year
@@ -173,6 +183,9 @@ public class Renderer {
 	private static int lastPercentHP = 100;
 	private static int lastFatigue = 0;
 	
+	private static float lastBaseDrainRate = 0;
+	private static float lastAdjustedDrainRate = 0;
+	
 	public static void present(Graphics g, Image image) {
 		// Update timing
 		long new_time = System.currentTimeMillis();
@@ -191,9 +204,6 @@ public class Renderer {
 			macOS_resize_workaround = false;
 		}
 		
-		// Run other parts update methods
-		Client.update();
-		
 		Graphics2D g2 = (Graphics2D)game_image.getGraphics(); // TODO: Declare g2 outside of the present method
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		g2.setFont(font_main);
@@ -203,32 +213,30 @@ public class Renderer {
 		
 		// In-game UI
 		if (Client.state == Client.STATE_GAME) {
+			
+			// Update player coords
+			for (Iterator<NPC> iterator = Client.npc_list.iterator(); iterator.hasNext();) {
+				NPC npc = iterator.next(); // TODO: Remove unnecessary allocations
+				if (npc != null && Client.player_name != null && Client.player_name.equals(npc.name)) {
+					Client.player_posX = npc.x;
+					Client.player_posY = npc.y;
+					Client.player_height = npc.height;
+					Client.player_width = npc.width;
+					
+					Client.isGameLoaded = true;
+				}
+			}
+			
 			if (!Client.isInterfaceOpen() && Client.show_menu == Client.MENU_NONE) {
 				List<Rectangle> npc_hitbox = new ArrayList<>();
 				List<Rectangle> player_hitbox = new ArrayList<>();
 				List<Point> entity_text_loc = new ArrayList<>();
 				
-				float alphaHP = 1.0f;
-				Color colorHP = color_hp;
-				
 				for (Iterator<NPC> iterator = Client.npc_list.iterator(); iterator.hasNext();) {
 					NPC npc = iterator.next(); // TODO: Remove unnecessary allocations
 					Color color = color_low;
 					
-					if (Client.player_name == null) {
-						Client.getPlayerName();
-					}
-					
-					// Update player coords
-					if (npc != null && Client.player_name.equals(npc.name)) {
-						Client.player_posX = npc.x;
-						Client.player_posY = npc.y;
-						Client.player_height = npc.height;
-						Client.player_width = npc.width;
-					}
-					
 					boolean show = false;
-					
 					if (npc.type == NPC.TYPE_PLAYER) {
 						color = color_fatigue;
 						
@@ -368,10 +376,6 @@ public class Renderer {
 				Client.updateCurrentFatigue();
 			}
 			
-			if (!Client.isWelcomeScreen() && null == Client.player_name) {
-				Client.getPlayerName();
-			}
-			
 			// Clear item list for next frame
 			Client.item_list.clear();
 			last_item = null;
@@ -437,7 +441,6 @@ public class Renderer {
 						setAlpha(g2, alphaFatigue);
 						drawShadowText(g2, "Fatigue: " + Client.getFatigue() + "/100", x, y, colorFatigue, false);
 						y += 16;
-						setAlpha(g2, 1.0f);
 					}
 				} else {
 					int barSize = 4 + image_bar_frame.getWidth(null);
@@ -456,7 +459,8 @@ public class Renderer {
 			}
 			
 			// Draw under combat style info
-			if (!Client.isInterfaceOpen()) {
+			// buffs, debuffs and cooldowns
+			if (!Client.isInterfaceOpen() && Settings.SHOW_BUFFS) {
 				if (time <= Client.magic_timer) {
 					float timer = (float)Math.ceil((Client.magic_timer - time) / 1000.0);
 					drawShadowText(g2, "Magic Timer: " + (int)timer, x, y, color_text, false);
@@ -481,6 +485,48 @@ public class Renderer {
 						drawShadowText(g2, Client.skill_name[i], x + 32, y, color, false);
 						y += 14;
 					}
+				}
+				
+				int base_drain_rate = 0;
+				float adjusted_drain_rate = 0;
+				// 14 selectable prayers
+				for (int i = 0; i < 14; i++) {
+					if (Client.prayers_on[i] == true)
+						base_drain_rate += Client.DRAIN_RATES[i];
+				}
+				lastBaseDrainRate = base_drain_rate;
+				if (base_drain_rate != 0) {
+					// with prayer equipment, combat rounds get increased about 3.1% per +1
+					float factor = 1.0f;
+					if (Client.current_equipment_stats[4] > 1) {
+						int boost = Client.current_equipment_stats[4] - 1;
+						float increase_rounds = boost * 0.031f;
+						// percentage of increase per round
+						factor = 1 + increase_rounds;
+					}
+					adjusted_drain_rate = base_drain_rate / factor;
+					lastAdjustedDrainRate = adjusted_drain_rate;
+					// a drain_rate of 60 drains 1 point in 3.33 secs
+					// 75 drains 1.25 points in 3.33 secs -> 3.33/(adjusted/60)
+					float points_psec = (3.33f * 60.0f) / adjusted_drain_rate;
+					
+					drawShadowText(g2, "-1", x, y, color_low, false);
+					drawShadowText(g2, "Prayer/" + Client.trimNumber(points_psec, 1) + "s", x + 32, y, color_low, false);
+					y += 14;
+				}
+				else {
+					// no prayer armour adjusting drain rate
+					lastAdjustedDrainRate = lastBaseDrainRate;
+				}
+				if (time > Client.poison_timer && Client.is_poisoned) {
+					// more than 20 seconds passed and last status was poison, user probably is no longer
+					// poisoned
+					Client.is_poisoned = false;
+					Client.poison_timer = time;
+				}
+				if (Client.is_poisoned) {
+					drawShadowText(g2, "Poisoned!", x, y, color_poison, false);
+					y += 14;
 				}
 			}
 			
@@ -519,6 +565,13 @@ public class Renderer {
 				drawShadowText(g2, "Fatigue: " + ((float)Client.fatigue * 100.0f / 750.0f), x, y, color_text, false);
 				y += 16;
 				
+				// Draw Drain rates
+				y += 16;
+				drawShadowText(g2, "Base Drain Rate: " + lastBaseDrainRate, x, y, color_text, false);
+				y += 16;
+				drawShadowText(g2, "Adjusted Drain Rate: " + Client.trimNumber(lastAdjustedDrainRate, 1), x, y, color_text, false);
+				y += 16;
+				
 				// Draw Mouse Info
 				y += 16;
 				drawShadowText(g2, "Mouse Position: " + MouseHandler.x + ", " + MouseHandler.y, x, y, color_text, false);
@@ -541,7 +594,7 @@ public class Renderer {
 				
 				x = 256;
 				y = 32;
-				drawShadowText(g2, "FPS: " + fps, x, y, color_text, false);
+				drawShadowText(g2, "FPS: " + fps + " (" + Client.updatesPerSecond + ")", x, y, color_text, false);
 				y += 16;
 				drawShadowText(g2, "Game Size: " + width + "x" + height, x, y, color_text, false);
 				y += 16;
@@ -571,9 +624,28 @@ public class Renderer {
 				drawShadowText(g2, "Plane: (" + Client.planeWidth + "," + Client.planeHeight + "," + Client.planeIndex + ")", x, y, color_text, false);
 				y += 16;
 				drawShadowText(g2, "combat_timer: " + Client.combat_timer, x, y, color_text, false);
+				y += 32;
+				drawShadowText(g2, "frame_time_slice: " + Replay.frame_time_slice, x, y, color_text, false);
+				y += 16;
+				drawShadowText(g2, "lag: " + Replay.timestamp_lag + " updates", x, y, color_text, false);
+				y += 16;
+				drawShadowText(g2, "replay_timestamp: " + Replay.timestamp, x, y, color_text, false);
+				y += 16;
+				drawShadowText(g2, "replay_server_timestamp: " + Replay.timestamp_server_last, x, y, color_text, false);
 			}
 			
-			// drawShadowText(g2, "Test: " + Client.test, 100, 100, color_text, false);
+			// A little over a full tick
+			if (Settings.INDICATORS && Replay.getServerLag() >= 35) {
+				x = width - 80; y = height - 80;
+				setAlpha(g2, alpha_time);
+				g2.drawImage(Launcher.icon_warn.getImage(), x, y, 32, 32, null);
+				x += 16; y += 38;
+				drawShadowText(g2, "Server Lag", x, y, color_fatigue, true);
+				y += 12;
+				int lag = (Replay.getServerLag() - 31) * Replay.getFrameTimeSlice();
+				drawShadowText(g2, new DecimalFormat("0.0").format((float)lag / 1000.0f) + "s", x, y, color_low, true);
+				setAlpha(g2, 1.0f);
+			}
 			
 			g2.setFont(font_big);
 			if (Settings.FATIGUE_ALERT && Client.getFatigue() >= 98 && !Client.isInterfaceOpen()) {
@@ -609,6 +681,79 @@ public class Renderer {
 				if (MouseHandler.x >= bounds.x && MouseHandler.x <= bounds.x + bounds.width && MouseHandler.y >= bounds.y && MouseHandler.y <= bounds.y + bounds.height
 						&& MouseHandler.mouseClicked) {
 					Game.getInstance().getJConfig().changeWorld(i + 1);
+				}
+			}
+			
+			// TODO: This will need to be adjusted when the login screen is resizable
+			Rectangle bounds = new Rectangle(512 - 148, 346 - 36, 48, 16);
+			drawShadowText(g2, "-server replay-", bounds.x + 48, bounds.y - 10, color_fatigue, true);
+			
+			setAlpha(g2, 0.5f);
+			if (replayOption == 1 || Settings.RECORD_AUTOMATICALLY) {
+				g2.setColor(color_low);
+			} else {
+				g2.setColor(color_text);
+            }
+			g2.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+			
+			if (Settings.RECORD_AUTOMATICALLY) {
+				g2.setColor(color_text);
+				g2.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
+			}
+			
+			setAlpha(g2, 1.0f);
+			drawShadowText(g2, "record", bounds.x + (bounds.width / 2), bounds.y + 6, color_text, true);
+			// Handle replay record selection click
+			if (MouseHandler.x >= bounds.x && MouseHandler.x <= bounds.x + bounds.width && MouseHandler.y >= bounds.y && MouseHandler.y <= bounds.y + bounds.height
+					&& MouseHandler.mouseClicked) {
+				Client.showRecordAlwaysDialogue = true;
+				
+				if (replayOption == 1) {
+					replayOption = 0;
+				} else {
+					replayOption = 1;
+				}
+			}
+			bounds = new Rectangle(bounds.x + bounds.width + 4, bounds.y, 48, bounds.height);
+			setAlpha(g2, 0.5f);
+			if (replayOption == 2)
+				g2.setColor(color_low);
+			else
+				g2.setColor(color_text);
+			g2.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+			setAlpha(g2, 1.0f);
+			drawShadowText(g2, "play", bounds.x + (bounds.width / 2), bounds.y + 6, color_text, true);
+			// Handle replay play selection click
+			if (MouseHandler.x >= bounds.x && MouseHandler.x <= bounds.x + bounds.width && MouseHandler.y >= bounds.y && MouseHandler.y <= bounds.y + bounds.height
+					&& MouseHandler.mouseClicked) {
+				if (replayOption == 2) {
+					replayOption = 0;
+				} else {
+                    if (!Util.isMacOS()) {
+						JFileChooser j = new JFileChooser(Settings.Dir.REPLAY);
+						j.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+						int response = j.showDialog(Game.getInstance().getApplet(), "Select Folder");
+					
+						File selection = j.getSelectedFile();
+						if (selection != null && response != JFileChooser.CANCEL_OPTION) {
+							replayName = selection.getPath();
+							if (Replay.isValid(replayName)) {
+								replayOption = 2;
+								Logger.Info("Replay selected: " + replayName);
+								Client.login_hook();
+							} else {
+								JOptionPane.showMessageDialog(Game.getInstance().getApplet(), "The replay folder you selected is not valid.\n" +
+									"\n" +
+									"You need to select a folder that contains the 'version.bin', 'in.bin.gz', and 'keys.bin' for your replay.\n" +
+									"They're usually in a folder with your login username.", "rscplus", JOptionPane.ERROR_MESSAGE,
+									Launcher.icon_warn);
+							}
+						} else {
+							replayOption = 0;
+						}
+                    } else {
+                        Client.showMacintoshReplayNotImplementedError = true;
+                    }
 				}
 			}
 			
@@ -669,6 +814,7 @@ public class Renderer {
 		g.drawImage(game_image, 0, 0, null);
 		
 		frames++;
+		time = System.currentTimeMillis();
 		if (time > fps_timer) {
 			fps = frames;
 			frames = 0;
@@ -681,6 +827,9 @@ public class Renderer {
 			Camera.setFoV(Settings.FOV);
 			Settings.fovUpdateRequired = false;
 		}
+		
+		// Reset the mouse click handler
+		MouseHandler.mouseClicked = false;
 	}
 	
 	public static void drawBar(Graphics2D g, Image image, int x, int y, Color color, float alpha, int value, int total) {
@@ -773,10 +922,6 @@ public class Renderer {
 	private static boolean isInCombatWithNPC(NPC npc) {
 		if (npc == null) {
 			return false;
-		}
-		
-		if (Client.player_name == null) {
-			Client.getPlayerName();
 		}
 		
 		int bottom_posY_npc = npc.y + npc.height;

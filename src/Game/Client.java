@@ -33,8 +33,10 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JOptionPane;
 import org.fusesource.jansi.AnsiConsole;
 import Client.KeybindSet;
+import Client.Launcher;
 import Client.Logger;
 import Client.NotificationsHandler;
 import Client.NotificationsHandler.NotifType;
@@ -71,6 +73,9 @@ public class Client {
 	public static final int SKILL_AGILITY = 16;
 	public static final int SKILL_THIEVING = 17;
 	
+	public static final int STAT_PRAYER = 4;
+	public static final int[] DRAIN_RATES = { 15, 15, 15, 30, 30, 30, 5, 10, 10, 60, 60, 60, 60, 60 };
+	
 	public static final int STATE_LOGIN = 1;
 	public static final int STATE_GAME = 2;
 	
@@ -89,6 +94,7 @@ public class Client {
 	public static final int CHAT_PRIVATE_LOG_IN_OUT = 5;
 	public static final int CHAT_TRADE_REQUEST_RECEIVED = 6; //only used when another player sends you a trade request. (hopefully!)
 	public static final int CHAT_OTHER = 7;	// used for when you send a player a duel/trade request, follow someone, or drop an item
+	public static final int CHAT_INCOMING_OPTION = 8;
 	
 	public static final int COMBAT_CONTROLLED = 0;
 	public static final int COMBAT_AGGRESSIVE = 1;
@@ -102,6 +108,7 @@ public class Client {
 	public static long magic_timer = 0L;
 	
 	public static int combat_timer;
+	public static boolean isGameLoaded;
 	public static boolean show_bank;
 	public static boolean show_duel;
 	public static boolean show_duelconfirm;
@@ -115,10 +122,17 @@ public class Client {
 	public static boolean show_tradeconfirm;
 	public static boolean show_welcome;
 	
+	public static boolean runReplayHook = false;
+	
 	public static int[] inventory_items;
 	
+	public static long poison_timer = 0L;
+	public static boolean is_poisoned = false;
 	public static int fatigue;
 	private static float currentFatigue;
+	public static boolean[] prayers_on;
+	// equipment stats (array position 4 holds prayer bonus to determine change drain rate)
+	public static int[] current_equipment_stats;
 	public static int[] current_level;
 	public static int[] base_level;
 	public static int[] xp;
@@ -127,6 +141,15 @@ public class Client {
 	
 	public static int friends_count;
 	public static String[] friends;
+	public static String[] friends_world;
+	public static String[] friends_formerly;
+	public static int[] friends_online;
+	
+	public static int ignores_count;
+	public static String[] ignores;
+	public static String[] ignores_formerly;
+	public static String[] ignores_copy;
+	public static String[] ignores_formerly_copy;
 	
 	public static String pm_username;
 	public static String pm_text;
@@ -135,6 +158,7 @@ public class Client {
 	
 	public static int login_screen;
 	public static String username_login;
+	public static int autologin_timeout;
 	
 	public static Object player_object;
 	public static String player_name = null;
@@ -166,6 +190,7 @@ public class Client {
 	public static int[] bank_items;
 	public static int[] new_bank_items_count;
 	public static int[] new_bank_items;
+	public static int bank_active_page;
 	
 	// these two variables, they indicate distinct bank items count
 	public static int new_count_items_bank;
@@ -183,10 +208,17 @@ public class Client {
 	public static XPBar xpbar = new XPBar();
 	
 	private static TwitchIRC twitch = new TwitchIRC();
-	private static MouseHandler handler_mouse;
-	private static KeyboardHandler handler_keyboard;
+	public static MouseHandler handler_mouse;
+	public static KeyboardHandler handler_keyboard;
 	private static float[] xpdrop_state = new float[18];
 	private static long updateTimer = 0;
+	
+	public static boolean showRecordAlwaysDialogue = false;
+    public static boolean showMacintoshReplayNotImplementedError = false;
+	
+	public static long update_timer;
+	public static long updates;
+	public static long updatesPerSecond;
 	
 	/**
 	 * A boolean array that stores if the XP per hour should be shown for a given skill when hovering on the XP bar.
@@ -226,12 +258,15 @@ public class Client {
 	 * Iterates through {@link #strings} array and checks if various conditions are met. Used for patching client text.
 	 */
 	public static void adaptStrings() {
-		for (int i = 0; i < strings.length; i++) {
-			if (!Settings.SHOW_LOGINDETAILS && strings[i].startsWith("from:")) {
-				strings[i] = "@bla@from:";
-			} else if (Settings.SHOW_LOGINDETAILS && strings[i].startsWith("@bla@from:")) {
-				strings[i] = "from:";
-			}
+		
+	}
+	
+	// string 662 is the one in version 235 that contains the "from:" used in login welcome screen
+	public static void adaptLoginInfo() {
+		if (!Settings.SHOW_LOGINDETAILS && strings[662].startsWith("from:")) {
+			strings[662] = "@bla@from:";
+		} else if (Settings.SHOW_LOGINDETAILS && strings[662].startsWith("@bla@from:")) {
+			strings[662] = "from:";
 		}
 	}
 	
@@ -269,7 +304,46 @@ public class Client {
 		// FIXME: This is a hack from a rsc client update (so we can skip updating the client this time)
 		version = 235;
 		
+		long time = System.currentTimeMillis();
+		
+		Replay.update();
+		
+		if (Settings.RECORD_AUTOMATICALLY_FIRST_TIME && showRecordAlwaysDialogue) {
+			int response = JOptionPane.showConfirmDialog(Game.getInstance().getApplet(), "If you'd like, you can record your session every time you play by default.\n" +
+					"\n" +
+					"These recordings do not leave your computer unless you manually do it on purpose.\n" +
+					"They also take up negligible space. You could fit about a 6 hour session on a floppy disk, depending on what you do.\n" +
+					"\n" +
+					"Recordings can be played back later, even offline, and capture the data the server sends and that you send the server.\n" +
+					"Your password is not in the capture.\n" +
+					"\n" +
+					"Would you like to record all your play sessions by default?\n" +
+					"\n" +
+					"NOTE: This option can be toggled in the Settings interface (ctrl-o by default) under the Replay tab.", "rscplus", JOptionPane.YES_NO_OPTION,
+					JOptionPane.INFORMATION_MESSAGE, Launcher.icon);
+			if (response == JOptionPane.YES_OPTION || response == JOptionPane.CLOSED_OPTION) {
+				Settings.RECORD_AUTOMATICALLY = true;
+			} else if (response == JOptionPane.NO_OPTION) {
+				Settings.RECORD_AUTOMATICALLY = false;
+			}
+			Settings.RECORD_AUTOMATICALLY_FIRST_TIME = false;
+			Settings.save();
+		}
+        
+        if (showMacintoshReplayNotImplementedError) {
+            JOptionPane.showMessageDialog(Game.getInstance().getApplet(), "Sorry, but the ability to replay your recordings on Mac is not implemented yet.\n" +
+                    "\n" +
+                    "Recordings made on Mac are valid and good, but there's currently an error actually playing them back.\n" +
+                    "If you want to see your playback, unfortunately your options are to use rscplus on Windows, on Linux, or wait.\n"+
+                    "Hopefully a fix for this can be made soon, but in the meantime, feel free to keep making recordings.", "rscplus", JOptionPane.ERROR_MESSAGE,
+                    Launcher.icon_warn);
+            showMacintoshReplayNotImplementedError = false;
+        }
+		
 		if (state == STATE_GAME) {
+			Client.getPlayerName();
+			Client.adaptLoginInfo();
+			
 			// Process XP drops
 			boolean dropXP = xpdrop_state[SKILL_HP] > 0.0f; // TODO: Declare dropXP outside of the update method
 			for (int i = 0; i < xpdrop_state.length; i++) {
@@ -316,6 +390,23 @@ public class Client {
 			if (isWelcomeScreen() && currentFatigue != getActualFatigue())
 				currentFatigue = getActualFatigue();
 		}
+		
+		Game.getInstance().updateTitle();
+		
+		// Login hook on this thread
+		if (runReplayHook) {
+			Renderer.replayOption = 2;
+			runReplayHook = false;
+			login_hook();
+		}
+		
+		updates++;
+		time = System.currentTimeMillis();
+		if (time >= update_timer) {
+			updatesPerSecond = updates;
+			update_timer = time + 1000;
+			updates = 0;
+		}
 	}
 	
 	public static void init_login() {
@@ -324,22 +415,77 @@ public class Client {
 		
 		Camera.init();
 		state = STATE_LOGIN;
+		isGameLoaded = false;
+		Renderer.replayOption = 0;
 		
 		twitch.disconnect();
 		
-		// After logging out, the login screen shows "Please wait... Connecting to server", so we'll overwrite this
-		setLoginMessage("Please enter your username and password", "");
+		resetLoginMessage();
+		Replay.closeReplayPlayback();
+		Replay.closeReplayRecording();
 		adaptStrings();
 		player_name = null;
 	}
 	
 	public static void init_game() {
+		// Reset values to make the client more deterministic
+		// This helps out the replay mode to have matching output from the time it was recorded
 		Camera.init();
+		Menu.init();
 		combat_style = Settings.COMBAT_STYLE;
 		state = STATE_GAME;
+		bank_active_page = 0;
+		combat_timer = 0;
 		
 		if (TwitchIRC.isUsing())
 			twitch.connect();
+	}
+	
+	public static void login_hook() {
+		// Order of comparison matters here
+		Replay.init();
+		if (Renderer.replayOption == 2) {
+			if (!Replay.initializeReplayPlayback(Renderer.replayName))
+				Renderer.replayOption = 0;
+		} else if (Renderer.replayOption == 1 || Settings.RECORD_AUTOMATICALLY) {
+			Replay.initializeReplayRecording();
+        }
+	}
+	
+	public static void disconnect_hook() {
+		// ::lostcon or closeConnection
+		Replay.closeReplayRecording();
+	}
+	
+	// check if login attempt is not a valid login or reconnect, send to disconnect hook
+	// response 1 i don't know exactly what's for might be trying to connect in combat or something
+	public static void login_attempt_hook(int response, boolean reconnecting, int[] xtea_keys) {
+		// at this stage just close it
+		if (response != 64 && response != 1) {
+			disconnect_hook();
+		}
+	}
+	
+	public static void error_game_hook(String s) {
+		// from here its error_game_ + s -> check if its error_game_crash, thats the finalizing one that interrupts
+		// things
+		Logger.Error("Error game reported: " + s);
+		if (s.toLowerCase().equals("crash")) {
+			disconnect_hook();
+		}
+	}
+	
+	/**
+	 * Hooks the message that hovering over X thing gives in the client
+	 * 
+	 * @param tooltipMessage - the message in raw color format
+	 */
+	public static void mouse_action_hook(String tooltipMessage) {
+		// reserved
+	}
+	
+	public static void resetLoginMessage() {
+		setLoginMessage("Please enter your username and password", "");
 	}
 	
 	/**
@@ -347,7 +493,12 @@ public class Client {
 	 */
 	public static void getPlayerName() {
 		try {
-			player_name = (String)Reflection.characterName.get(player_object);
+			String name = (String)Reflection.characterName.get(player_object);
+			if (name != null) {
+				if (player_name == null || !name.equals(player_name)) {
+					player_name = name;
+				}
+			}
 		} catch (IllegalArgumentException | IllegalAccessException e1) {
 			e1.printStackTrace();
 		}
@@ -415,6 +566,9 @@ public class Client {
 			String[] commandArray = line.substring(2, line.length()).toLowerCase().split(" ");
 			
 			switch (commandArray[0]) {
+			case "togglebypassattack":
+				Settings.toggleBypassAttack();
+				break;
 			case "toggleroofs":
 				Settings.toggleHideRoofs();
 				break;
@@ -497,6 +651,9 @@ public class Client {
 				break;
 			case "toggleinvcount":
 				Settings.toggleInvCount();
+				break;
+			case "togglebuffs":
+				Settings.toggleBuffs();
 				break;
 			case "togglestatusdisplay":
 				Settings.toggleStatusDisplay();
@@ -633,7 +790,7 @@ public class Client {
 	 * @param message a message to print
 	 * @param chat_type the type of message to send
 	 */
-	public static void displayMessage(String message, int chat_type) {
+	public static synchronized void displayMessage(String message, int chat_type) {
 		if (Client.state != Client.STATE_GAME || Reflection.displayMessage == null)
 			return;
 		
@@ -656,6 +813,24 @@ public class Client {
 		try {
 			Reflection.setLoginText.invoke(Client.instance, (byte)-49, line2, line1);
 		} catch (Exception e) {
+		}
+	}
+	
+	public static void closeConnection(boolean close) {
+		if (Reflection.closeConnection == null)
+			return;
+		
+		try {
+			Reflection.closeConnection.invoke(Client.instance, close, 31);
+		} catch (Exception e) {
+		}
+	}
+	
+	public static void setInactivityTimer(int val) {
+		try {
+			Reflection.lastMouseAction.set(Client.instance, val);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 	
@@ -684,6 +859,24 @@ public class Client {
 			}
 		} catch (Exception e) {
 			
+		}
+	}
+	
+	/**
+	 * Logs the user in
+	 * 
+	 * @param reconnecting - is user reconnecting
+	 * @param user
+	 * @param pass
+	 */
+	public static void login(boolean reconnecting, String user, String pass) {
+		if (Reflection.login == null)
+			return;
+		
+		try {
+			Client.autologin_timeout = 2;
+			Reflection.login.invoke(Client.instance, -12, pass, user, reconnecting);
+		} catch (Exception e) {
 		}
 	}
 	
@@ -755,6 +948,14 @@ public class Client {
 			}
 		} else if (announceIfUpToDate) {
 			displayMessage("You're up to date: @gre@" + String.format("%8.6f", latestVersion), CHAT_QUEST);
+		}
+	}
+	
+	public static int attack_menu_hook(int cmpVar) {
+		if (Settings.BYPASS_ATTACK) {
+			return 10;
+		} else {
+			return cmpVar;
 		}
 	}
 	
@@ -835,6 +1036,29 @@ public class Client {
 	}
 	
 	/**
+	 * This method hooks all options received and adds them to console
+	 * 
+	 * @param menuOptions The options received from server
+	 * @param count The count for the options
+	 */
+	public static void receivedOptionsHook(String[] menuOptions, int count) {
+		int type = CHAT_INCOMING_OPTION;
+		
+		String option = "";
+		for (int i = 0; i < count; i++) {
+			option = menuOptions[i];
+			if (Settings.COLORIZE) {
+				AnsiConsole.systemInstall();
+				System.out.println(ansi()
+						.render("@|white (" + type + ")|@ " + colorizeMessage(option, type)));
+				AnsiConsole.systemUninstall();
+			} else {
+				System.out.println("(" + type + ") " + option);
+			}
+		}
+	}
+	
+	/**
 	 * This method hooks all chat messages.
 	 * 
 	 * @param username the username that the message originated from
@@ -842,6 +1066,13 @@ public class Client {
 	 * @param type the type of message being displayed
 	 */
 	public static void messageHook(String username, String message, int type) {
+		// Close dialogues when player says something in-game in quest chat
+		if (Replay.isPlaying) {
+			if (username != null && Client.player_name != null && username.equals(Client.player_name) && type == CHAT_QUEST) {
+				Replay.closeDialogue = true;
+			}
+		}
+		
 		if (username != null)
 			// Prevents non-breaking space in colored usernames appearing as an accented 'a' in console
 			username = username.replace("\u00A0", " ");
@@ -854,6 +1085,18 @@ public class Client {
 					magic_timer = Renderer.time + 21000L;
 				else if (Settings.TRAY_NOTIFS && message.contains("You have been standing here for 5 mins! Please move to a new area")) {
 					NotificationsHandler.notify(NotifType.LOGOUT, "Logout Notification", "You're about to log out");
+				}
+				// while the message is really You @gr2@are @gr1@poisioned! @gr2@You @gr3@lose @gr2@3 @gr1@health.
+				// it can be known looking for "poisioned!"
+				else if (message.contains("poisioned!")) {
+					is_poisoned = true;
+					poison_timer = Renderer.time + 21000L;
+				} else if (message.contains("You drink") && message.contains("poison")) {
+					is_poisoned = false;
+					poison_timer = Renderer.time;
+				} else if (message.contains("You retain your skills. Your objects land where you died") && is_poisoned) {
+					is_poisoned = false;
+					poison_timer = Renderer.time;
 				}
 			}
 		} else if (type == CHAT_PRIVATE) {
@@ -1008,6 +1251,7 @@ public class Client {
 		boolean blueMessage = (type == CHAT_NONE) && (colorMessage.contains("You have been standing here for 5 mins! Please move to a new area"));
 		boolean yellowMessage = (type == CHAT_NONE) && (colorMessage.contains("Well Done")); //tourist trap completion
 		boolean greenMessage = (type == CHAT_NONE) && (colorMessage.contains("You just advanced ") || colorMessage.contains("quest point") || colorMessage.contains("***") || colorMessage.contains("ou have completed")); //"***" is for Tourist Trap completion
+		greenMessage = greenMessage || (type == CHAT_NONE && colorMessage.contains("poisioned!"));
 		
 		if (blueMessage) { // this is one of the messages which we must overwrite expected color for
 			return "@|cyan,intensity_faint " + colorMessage + "|@";
@@ -1049,6 +1293,9 @@ public class Client {
 		case CHAT_TRADE_REQUEST_RECEIVED:
 		case CHAT_OTHER:
 			colorMessage = "@|white " + colorReplace(colorMessage) + "|@";
+			break;
+		case CHAT_INCOMING_OPTION:
+			colorMessage = "@|cyan,intensity_faint " + colorReplace(colorMessage) + "|@";
 			break;
 		default: // this should never happen, only 8 Chat Types
 			System.out.println("Unhandled chat type in colourizeMessage, please report this:" + type);

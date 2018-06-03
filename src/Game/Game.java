@@ -26,14 +26,23 @@ import java.applet.AppletContext;
 import java.applet.AppletStub;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.io.File;
 import java.net.URL;
+import java.text.DecimalFormat;
+import java.util.List;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import Client.JConfig;
 import Client.Launcher;
+import Client.Logger;
 import Client.NotificationsHandler;
 import Client.Settings;
 import Client.TrayHandler;
@@ -49,6 +58,7 @@ public class Game extends JFrame implements AppletStub, ComponentListener, Windo
 	
 	private JConfig m_config = new JConfig();
 	private Applet m_applet = null;
+	private String m_title = "";
 	
 	private Game() {
 		// Empty private constructor to prevent extra instances from being created.
@@ -92,12 +102,45 @@ public class Game extends JFrame implements AppletStub, ComponentListener, Windo
 		setLocationRelativeTo(null);
 		setVisible(true);
 		
+		updateTitle();
+		
 		Reflection.Load();
 		Renderer.init();
 		
 		if (!Util.isMacOS() && Settings.CUSTOM_CLIENT_SIZE) {
 			Game.getInstance().resizeFrameWithContents();
 		}
+		
+		setDropTarget(new DropTarget() {
+			public synchronized void drop(DropTargetDropEvent evt) {
+				try {
+					evt.acceptDrop(DnDConstants.ACTION_LINK);
+					List<File> droppedFiles = (List<File>)evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
+					for (File selection : droppedFiles) {
+						if (!Util.isMacOS()) {
+							if (selection != null && Client.state == Client.STATE_LOGIN) {
+								Renderer.replayName = selection.getPath();
+								if (Replay.isValid(Renderer.replayName)) {
+									Logger.Info("Replay selected: " + Renderer.replayName);
+									Client.runReplayHook = true;
+									return;
+								} else {
+									JOptionPane.showMessageDialog(Game.getInstance().getApplet(), "The replay folder you dropped onto the client is not a replay.\n" +
+											"\n" +
+											"You need to drop a folder that contains a 'version.bin', 'in.bin.gz', and 'keys.bin' for the replay.", "rscplus",
+											JOptionPane.ERROR_MESSAGE,
+											Launcher.icon_warn);
+								}
+							}
+						} else {
+							Client.showMacintoshReplayNotImplementedError = true;
+						}
+					}
+				} catch (Exception ex) {
+					ex.printStackTrace();
+				}
+			}
+		});
 	}
 	
 	public JConfig getJConfig() {
@@ -113,14 +156,37 @@ public class Game extends JFrame implements AppletStub, ComponentListener, Windo
 		m_applet.start();
 	}
 	
-	@Override
-	public void setTitle(String title) {
-		String t = "rscplus";
+	public void updateTitle() {
+		String title = "rscplus (";
 		
-		if (title != null)
-			t = t + " (" + title + ")";
+		if(!Replay.isPlaying) {
+			title += "World " + Settings.WORLD;
+			
+			if (Client.player_name != null && Client.player_name.length() != 0) {
+				title += "; " + Client.player_name;
+			}
+		}
+		else {
+			String elapsed = Util.formatTimeDuration(Replay.elapsedTimeMillis(), Replay.endTimeMillis());
+			String end = Util.formatTimeDuration(Replay.endTimeMillis(), Replay.endTimeMillis());
+			title += elapsed + " / " + end;
+			title += ", Speed: " + new DecimalFormat("##.##").format(Replay.fpsPlayMultiplier) + "x";
+			if (Replay.paused)
+				title += ", Paused";
+		}
 		
-		super.setTitle(t);
+		if (Replay.isRecording) {
+			String elapsed = Util.formatTimeDuration(Replay.elapsedTimeMillis(), Replay.elapsedTimeMillis());
+			title += "; Recording: " + elapsed;
+		}
+		
+		title += ")";
+		
+		if (m_title.equals(title)) {
+			return;
+		}
+		m_title = title;
+		super.setTitle(m_title);
 	}
 	
 	/*
