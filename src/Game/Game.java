@@ -24,14 +24,12 @@ package Game;
 import java.applet.Applet;
 import java.applet.AppletContext;
 import java.applet.AppletStub;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.event.ComponentEvent;
-import java.awt.event.ComponentListener;
-import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
+import java.awt.*;
+import java.awt.event.*;
 import java.net.URL;
-import javax.swing.JFrame;
+import javax.swing.*;
+import javax.swing.border.Border;
+
 import Client.JConfig;
 import Client.Launcher;
 import Client.NotificationsHandler;
@@ -49,11 +47,16 @@ public class Game extends JFrame implements AppletStub, ComponentListener, Windo
 	
 	private JConfig m_config = new JConfig();
 	private Applet m_applet = null;
-	
+
+	// Coordinates
+	private static Point m_coords = null;
+	private static Color backgroundGray =  new Color(40, 40, 40);
+	private static Color borderGray =  new Color(30, 30, 30);
+
 	private Game() {
 		// Empty private constructor to prevent extra instances from being created.
 	}
-	
+
 	public void setApplet(Applet applet) {
 		m_applet = applet;
 		m_applet.setStub(this);
@@ -69,6 +72,8 @@ public class Game extends JFrame implements AppletStub, ComponentListener, Windo
 	public void start() {
 		if (m_applet == null)
 			return;
+
+		setDefaultLookAndFeelDecorated(true);
 		
 		// Set window icon
 		setIconImage(Launcher.icon.getImage());
@@ -77,10 +82,86 @@ public class Game extends JFrame implements AppletStub, ComponentListener, Windo
 		setResizable(true);
 		addWindowListener(this);
 		setMinimumSize(new Dimension(1, 1));
-		
+
+		// Customize window frame
+//		setUndecorated(true);
+		Container pane = getContentPane();
+		pane.setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT);
+		pane.setLayout(new GridBagLayout());
+		GridBagConstraints c = new GridBagConstraints();
+		c.fill = GridBagConstraints.HORIZONTAL;
+
+		final JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+		final JPanel sidePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		final JPanel contentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		topPanel.addMouseListener(new MouseListener() {
+			@Override public void mouseClicked(MouseEvent e) {
+
+			}
+
+			@Override public void mousePressed(MouseEvent e) {
+				m_coords = e.getPoint();
+				m_coords.x += 4;
+				m_coords.y += 4;
+			}
+
+			@Override public void mouseReleased(MouseEvent e) {
+				m_coords = null;
+			}
+
+			@Override public void mouseEntered(MouseEvent e) {
+
+			}
+
+			@Override public void mouseExited(MouseEvent e) {
+
+			}
+		});
+		topPanel.addMouseMotionListener(new MouseMotionListener() {
+			@Override public void mouseDragged(MouseEvent e) {
+				Point curCoords = e.getLocationOnScreen();
+				setLocation(curCoords.x - m_coords.x, curCoords.y - m_coords.y);
+			}
+
+			@Override public void mouseMoved(MouseEvent e) {
+
+			}
+		});
+
+		final JButton bExit = new JButton("X");
+		bExit.addActionListener(new ActionListener() {
+			@Override public void actionPerformed(ActionEvent e) {
+				JComponent comp = (JComponent) e.getSource();
+				Window win = SwingUtilities.getWindowAncestor(comp);
+				win.dispose();
+			}
+		});
+
+		topPanel.add(bExit);
+		topPanel.setBackground(borderGray);
+		c.fill = GridBagConstraints.BOTH;
+		c.gridx = 0;
+		c.gridy = 0;
+		pane.add(topPanel, c);
+
+		contentPanel.setBackground(Color.BLUE);
+		c.fill = GridBagConstraints.BOTH;
+		c.gridx = 0;
+		c.gridy = 1;
+		pane.add(contentPanel, c);
+
+		sidePanel.setBackground(Color.RED);
+		c.fill = GridBagConstraints.VERTICAL;
+		c.gridx = 1;
+		c.gridy = 1;
+		pane.add(sidePanel, c);
+
+		getRootPane().setWindowDecorationStyle(JRootPane.FRAME);
+		getRootPane().setBorder(BorderFactory.createMatteBorder(4, 4, 4, 4, borderGray));
+
 		// Add applet to window
-		setContentPane(m_applet);
-		getContentPane().setBackground(Color.BLACK);
+//		setContentPane(m_applet);
+		getContentPane().setBackground(backgroundGray);
 		getContentPane().setPreferredSize(new Dimension(512, 346));
 		addComponentListener(this);
 		pack();
